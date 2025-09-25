@@ -1,0 +1,296 @@
+import java.io.*;
+import java.nio.file.*;
+import java.util.*;
+import java.util.stream.Collectors;
+
+public class AllInOneApp {
+
+    // ======= Part B: Student (Serializable) =======
+    static class Student implements Serializable {
+        private static final long serialVersionUID = 1L;
+
+        private final int id;
+        private final String name;
+        private final double gpa;
+        private transient String notes; // transient won't be serialized
+
+        Student(int id, String name, double gpa, String notes) {
+            this.id = id;
+            this.name = name;
+            this.gpa = gpa;
+            this.notes = notes;
+        }
+
+        @Override
+        public String toString() {
+            return "Student{id=" + id + ", name='" + name + "', gpa=" + gpa + ", notes=" + notes + "}";
+        }
+    }
+
+    // ======= Part C: Employee =======
+    static class Employee {
+        int id;
+        String name;
+        String department;
+        double salary;
+
+        Employee(int id, String name, String department, double salary) {
+            this.id = id;
+            this.name = name;
+            this.department = department;
+            this.salary = salary;
+        }
+
+        static Employee fromCsv(String line) {
+            String[] parts = line.split(",", -1);
+            return new Employee(
+                Integer.parseInt(parts[0].trim()),
+                parts[1].trim(),
+                parts[2].trim(),
+                Double.parseDouble(parts[3].trim())
+            );
+        }
+
+        String toCsv() {
+            return id + "," + name + "," + department + "," + salary;
+        }
+
+        @Override
+        public String toString() {
+            return String.format("ID=%d, Name=%s, Dept=%s, Salary=%.2f", id, name, department, salary);
+        }
+    }
+
+    // ======= Part C: EMS helpers =======
+    static final Path EMP_FILE = Paths.get("employees.csv");
+
+    static void ensureEmpFile() {
+        try {
+            if (Files.notExists(EMP_FILE)) {
+                Files.createFile(EMP_FILE);
+            }
+        } catch (IOException e) {
+            System.err.println("Failed to initialize employees.csv: " + e.getMessage());
+        }
+    }
+
+    static List<Employee> loadAllEmployees() {
+        try {
+            List<String> lines = Files.readAllLines(EMP_FILE);
+            return lines.stream()
+                    .filter(s -> !s.isBlank())
+                    .map(Employee::fromCsv)
+                    .collect(Collectors.toList());
+        } catch (IOException e) {
+            System.err.println("Read error: " + e.getMessage());
+            return new ArrayList<>();
+        }
+    }
+
+    static void saveAllEmployees(List<Employee> employees) {
+        List<String> lines = employees.stream().map(Employee::toCsv).collect(Collectors.toList());
+        try {
+            Files.write(EMP_FILE, lines, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        } catch (IOException e) {
+            System.err.println("Write error: " + e.getMessage());
+        }
+    }
+
+    // ======= Part A: Autoboxing/Unboxing Sum =======
+    static void runPartA() {
+        System.out.println("\n--- Part A: Autoboxing/Unboxing Sum ---");
+        List<Integer> numbers = Arrays.asList(1, 2, 3, 4, 5); // autoboxing when creating the list
+        int sum = 0;
+        for (Integer n : numbers) {
+            sum += n; // unboxing
+        }
+        System.out.println("Sum (loop)   = " + sum);
+        int streamSum = numbers.stream().mapToInt(Integer::intValue).sum();
+        System.out.println("Sum (stream) = " + streamSum);
+    }
+
+    // ======= Part B: Serialization/Deserialization =======
+    static void runPartB(Scanner sc) {
+        System.out.println("\n--- Part B: Student Serialization/Deserialization ---");
+        String file = "student.ser";
+
+        // Gather simple demo input
+        try {
+            System.out.print("Student ID (int): ");
+            int id = Integer.parseInt(sc.nextLine().trim());
+            System.out.print("Name: ");
+            String name = sc.nextLine().trim();
+            System.out.print("GPA (double): ");
+            double gpa = Double.parseDouble(sc.nextLine().trim());
+            System.out.print("Notes (transient): ");
+            String notes = sc.nextLine().trim();
+
+            Student s = new Student(id, name, gpa, notes);
+
+            // Serialize
+            try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(file))) {
+                oos.writeObject(s);
+                System.out.println("Serialized to " + file + ": " + s);
+            }
+
+            // Deserialize
+            try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(file))) {
+                Student read = (Student) ois.readObject();
+                System.out.println("Deserialized from " + file + ": " + read);
+            }
+
+        } catch (NumberFormatException e) {
+            System.out.println("Invalid number input.");
+        } catch (IOException | ClassNotFoundException e) {
+            e.printStackTrace();
+        }
+    }
+
+    // ======= Part C: Employee Management Menu =======
+    static void runPartC(Scanner sc) {
+        ensureEmpFile();
+        while (true) {
+            System.out.println("\n=== Employee Management ===");
+            System.out.println("1. Add");
+            System.out.println("2. List");
+            System.out.println("3. Find by ID");
+            System.out.println("4. Update");
+            System.out.println("5. Delete");
+            System.out.println("6. Back to Main");
+            System.out.print("Choose: ");
+            String choice = sc.nextLine().trim();
+
+            switch (choice) {
+                case "1" -> addEmployee(sc);
+                case "2" -> listEmployees();
+                case "3" -> findEmployee(sc);
+                case "4" -> updateEmployee(sc);
+                case "5" -> deleteEmployee(sc);
+                case "6" -> { return; }
+                default -> System.out.println("Invalid choice.");
+            }
+        }
+    }
+
+    static void addEmployee(Scanner sc) {
+        try {
+            System.out.print("ID: ");
+            int id = Integer.parseInt(sc.nextLine().trim());
+            System.out.print("Name: ");
+            String name = sc.nextLine().trim();
+            System.out.print("Department: ");
+            String dept = sc.nextLine().trim();
+            System.out.print("Salary: ");
+            double salary = Double.parseDouble(sc.nextLine().trim());
+
+            List<Employee> all = loadAllEmployees();
+            boolean exists = all.stream().anyMatch(e -> e.id == id);
+            if (exists) {
+                System.out.println("Employee with this ID already exists.");
+                return;
+            }
+            all.add(new Employee(id, name, dept, salary));
+            saveAllEmployees(all);
+            System.out.println("Added.");
+        } catch (NumberFormatException ex) {
+            System.out.println("Invalid number.");
+        }
+    }
+
+    static void listEmployees() {
+        List<Employee> all = loadAllEmployees();
+        if (all.isEmpty()) {
+            System.out.println("No records.");
+            return;
+        }
+        all.forEach(System.out::println);
+    }
+
+    static void findEmployee(Scanner sc) {
+        try {
+            System.out.print("Enter ID: ");
+            int id = Integer.parseInt(sc.nextLine().trim());
+            List<Employee> all = loadAllEmployees();
+            all.stream().filter(e -> e.id == id).findFirst()
+               .ifPresentOrElse(
+                   System.out::println,
+                   () -> System.out.println("Not found.")
+               );
+        } catch (NumberFormatException ex) {
+            System.out.println("Invalid number.");
+        }
+    }
+
+    static void updateEmployee(Scanner sc) {
+        try {
+            System.out.print("Enter ID to update: ");
+            int id = Integer.parseInt(sc.nextLine().trim());
+            List<Employee> all = loadAllEmployees();
+            Optional<Employee> opt = all.stream().filter(e -> e.id == id).findFirst();
+            if (opt.isEmpty()) {
+                System.out.println("Not found.");
+                return;
+            }
+            Employee e = opt.get();
+            System.out.print("New Name (" + e.name + "): ");
+            String name = sc.nextLine().trim();
+            System.out.print("New Department (" + e.department + "): ");
+            String dept = sc.nextLine().trim();
+            System.out.print("New Salary (" + e.salary + "): ");
+            String salStr = sc.nextLine().trim();
+
+            if (!name.isEmpty()) e.name = name;
+            if (!dept.isEmpty()) e.department = dept;
+            if (!salStr.isEmpty()) e.salary = Double.parseDouble(salStr);
+
+            saveAllEmployees(all);
+            System.out.println("Updated.");
+        } catch (NumberFormatException ex) {
+            System.out.println("Invalid number.");
+        }
+    }
+
+    static void deleteEmployee(Scanner sc) {
+        try {
+            System.out.print("Enter ID to delete: ");
+            int id = Integer.parseInt(sc.nextLine().trim());
+            List<Employee> all = loadAllEmployees();
+            int before = all.size();
+            all = all.stream().filter(e -> e.id != id).collect(Collectors.toList());
+            if (all.size() == before) {
+                System.out.println("Not found.");
+                return;
+            }
+            saveAllEmployees(all);
+            System.out.println("Deleted.");
+        } catch (NumberFormatException ex) {
+            System.out.println("Invalid number.");
+        }
+    }
+
+    // ======= Main Menu =======
+    public static void main(String[] args) {
+        try (Scanner sc = new Scanner(System.in)) {
+            while (true) {
+                System.out.println("\n===== All-In-One Java Demo =====");
+                System.out.println("1. Part A: Autoboxing/Unboxing Sum");
+                System.out.println("2. Part B: Student Serialization/Deserialization");
+                System.out.println("3. Part C: Employee Management (File I/O)");
+                System.out.println("4. Exit");
+                System.out.print("Choose: ");
+                String choice = sc.nextLine().trim();
+
+                switch (choice) {
+                    case "1" -> runPartA();
+                    case "2" -> runPartB(sc);
+                    case "3" -> runPartC(sc);
+                    case "4" -> {
+                        System.out.println("Goodbye!");
+                        return;
+                    }
+                    default -> System.out.println("Invalid choice.");
+                }
+            }
+        }
+    }
+}
